@@ -1,0 +1,28 @@
+# Watchlist файл - додайте тікери для моніторингу
+# Рядки що починаються з # є коментарями
+
+# Технологічні компанії
+AAPL
+MSFT
+GOOGL
+AMZN
+TSLA
+NVDA
+META
+
+# Фінансовий сектор
+JPM
+BAC
+WFC
+GS
+
+# Охорона здоров'я
+JNJ
+PFE
+UNH
+ABBV
+
+# ETF
+SPY
+QQQ
+VTI
