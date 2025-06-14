@@ -5,9 +5,10 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import yfinance as yf
 from typing import List, Any, Dict
 from utils.logging_config import logger
+from config.settings import settings
 
 class DetailsDialog:
-    """Dialog for showing detailed trade analysis"""
+    """Dialog for showing detailed trade analysis with enhanced information"""
     
     def __init__(self, parent, ticker: str, trades: List[Any]):
         self.parent = parent
@@ -19,7 +20,7 @@ class DetailsDialog:
         """Show the dialog"""
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title(f"Детальний аналіз - {self.ticker}")
-        self.dialog.geometry("900x700")
+        self.dialog.geometry("1000x800")
         self.dialog.transient(self.parent)
         self.dialog.grab_set()
         
@@ -37,8 +38,8 @@ class DetailsDialog:
             main_frame,
             wrap='word',
             font=('Consolas', 10),
-            width=100,
-            height=40
+            width=120,
+            height=50
         )
         self.text_widget.pack(fill='both', expand=True)
         
@@ -48,9 +49,10 @@ class DetailsDialog:
         
         ttk.Button(button_frame, text="Закрити", command=self.dialog.destroy).pack(side='right')
         ttk.Button(button_frame, text="Копіювати", command=self.copy_to_clipboard).pack(side='right', padx=5)
+        ttk.Button(button_frame, text="Експорт", command=self.export_to_file).pack(side='right', padx=5)
     
     def populate_data(self):
-        """Populate dialog with trade data"""
+        """Populate dialog with comprehensive trade data"""
         try:
             # Find trades for this ticker
             ticker_trades = [t for t in self.trades if t.ticker == self.ticker]
@@ -62,50 +64,177 @@ class DetailsDialog:
             # Use the most recent trade
             trade = ticker_trades[0]
             
-            content = f"ДЕТАЛЬНИЙ АНАЛІЗ - {self.ticker}\n"
-            content += "=" * 60 + "\n\n"
+            content = f"📊 ДЕТАЛЬНИЙ ФІНАНСОВИЙ АНАЛІЗ - {self.ticker}\n"
+            content += "=" * 80 + "\n\n"
             
-            # Basic info
+            # Basic company info
+            content += "🏢 ОСНОВНА ІНФОРМАЦІЯ\n"
+            content += "-" * 30 + "\n"
             content += f"Тікер: {trade.ticker}\n"
             content += f"Сектор: {trade.sector}\n"
             content += f"Поточна ціна: ${trade.current_price:.2f}\n" if trade.current_price else "Поточна ціна: N/A\n"
-            content += f"Рекомендація: {trade.recommendation.value}\n" if trade.recommendation else "Рекомендація: N/A\n"
-            content += f"Оцінка: {trade.score}\n\n"
+            content += f"Загальна рекомендація: {trade.recommendation.value}\n" if trade.recommendation else "Рекомендація: N/A\n"
+            content += f"Фінансова оцінка: {trade.score}/10\n\n"
             
-            # Target prices
-            content += "ЦІЛЬОВІ ЦІНИ:\n"
-            content += "-" * 20 + "\n"
+            # Target prices with detailed breakdown
+            content += "🎯 ЦІЛЬОВІ ЦІНИ ТА ПРОГНОЗИ\n"
+            content += "-" * 35 + "\n"
             for source, price in trade.target_prices.items():
                 if price:
-                    content += f"{source.title()}: ${price:.2f}\n"
+                    potential = ((price - trade.current_price) / trade.current_price * 100) if trade.current_price else 0
+                    content += f"{source.title()}: ${price:.2f} (потенціал: {potential:+.1f}%)\n"
                 else:
                     content += f"{source.title()}: N/A\n"
             
             if trade.fair_avg:
-                content += f"Середня цільова ціна: ${trade.fair_avg:.2f}\n"
+                avg_potential = ((trade.fair_avg - trade.current_price) / trade.current_price * 100) if trade.current_price else 0
+                content += f"\n📈 Середня цільова ціна: ${trade.fair_avg:.2f} (потенціал: {avg_potential:+.1f}%)\n"
             content += "\n"
             
-            # Analysis reasons
-            content += "ЛОГІКА АНАЛІЗУ:\n"
+            # Enhanced financial analysis
+            content += "💰 ФІНАНСОВИЙ АНАЛІЗ\n"
+            content += "-" * 25 + "\n"
+            
+            # Add financial metrics if available
+            if hasattr(trade, 'financial_metrics'):
+                metrics = trade.financial_metrics
+                content += f"P/E Ratio: {metrics.get('pe_ratio', 'N/A')}\n"
+                content += f"PEG Ratio: {metrics.get('peg_ratio', 'N/A')}\n"
+                content += f"ROE: {metrics.get('roe', 'N/A')}\n"
+                content += f"Debt/Equity: {metrics.get('debt_to_equity', 'N/A')}\n"
+                content += f"Free Cash Flow: {metrics.get('free_cash_flow', 'N/A')}\n"
+                content += f"EBITDA: {metrics.get('ebitda', 'N/A')}\n"
+                content += f"Market Cap: {metrics.get('market_cap', 'N/A')}\n"
+                content += f"Beta: {metrics.get('beta', 'N/A')}\n"
+                content += f"Dividend Yield: {metrics.get('dividend_yield', 'N/A')}\n"
+            
+            content += "\n"
+            
+            # Technical analysis
+            content += "📈 ТЕХНІЧНИЙ АНАЛІЗ\n"
+            content += "-" * 25 + "\n"
+            if hasattr(trade, 'technical_analysis') and trade.technical_analysis:
+                tech = trade.technical_analysis
+                content += f"RSI (14): {tech.rsi:.2f}\n" if tech.rsi else "RSI (14): N/A\n"
+                content += f"MACD: {tech.macd:.4f}\n" if tech.macd else "MACD: N/A\n"
+                content += f"MACD Signal: {tech.macd_signal:.4f}\n" if tech.macd_signal else "MACD Signal: N/A\n"
+                content += f"SMA20: ${tech.sma20:.2f}\n" if tech.sma20 else "SMA20: N/A\n"
+                content += f"EMA50: ${tech.ema50:.2f}\n" if tech.ema50 else "EMA50: N/A\n"
+                content += f"Bollinger Upper: ${tech.bb_upper:.2f}\n" if tech.bb_upper else "Bollinger Upper: N/A\n"
+                content += f"Bollinger Lower: ${tech.bb_lower:.2f}\n" if tech.bb_lower else "Bollinger Lower: N/A\n"
+                content += f"Support: ${tech.support:.2f}\n" if tech.support else "Support: N/A\n"
+                content += f"Resistance: ${tech.resistance:.2f}\n" if tech.resistance else "Resistance: N/A\n"
+                content += f"Trend: {tech.trend}\n"
+            else:
+                content += "Технічний аналіз недоступний\n"
+            content += "\n"
+            
+            # Analysis logic with detailed explanations
+            content += "🧠 ЛОГІКА АНАЛІЗУ ТА ОБҐРУНТУВАННЯ\n"
+            content += "-" * 45 + "\n"
+            for i, reason in enumerate(trade.reasons, 1):
+                # Add emoji indicators for positive/negative factors
+                if any(word in reason.lower() for word in ['позитивний', 'відмінний', 'хороший', 'низький p/e', 'купує']):
+                    content += f"✅ {i}. {reason}\n"
+                elif any(word in reason.lower() for word in ['негативний', 'високий', 'продає', 'перекуплено']):
+                    content += f"❌ {i}. {reason}\n"
+                else:
+                    content += f"➖ {i}. {reason}\n"
+            content += "\n"
+            
+            # Risk assessment
+            content += "⚠️ ОЦІНКА РИЗИКІВ\n"
             content += "-" * 20 + "\n"
-            for reason in trade.reasons:
-                content += f"• {reason}\n"
+            risk_score = self.calculate_risk_score(trade)
+            content += f"Рівень ризику: {risk_score}/10\n"
+            content += self.get_risk_explanation(risk_score)
             content += "\n"
             
-            # Insider info
-            content += "ІНФОРМАЦІЯ ПРО ІНСАЙДЕРА:\n"
-            content += "-" * 30 + "\n"
+            # Insider information
+            content += "👤 ІНФОРМАЦІЯ ПРО ІНСАЙДЕРА\n"
+            content += "-" * 35 + "\n"
             content += f"Ім'я: {trade.insider_name}\n"
             content += f"Посада: {trade.insider_title}\n"
             content += f"Тип операції: {trade.trade_type.value.title()}\n"
-            content += f"Сума: ${trade.amount:,.2f}\n"
-            content += f"Дата: {trade.date.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            content += f"Сума операції: ${trade.amount:,.2f}\n"
+            content += f"Дата операції: {trade.date.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            
+            # Calculate shares if price available
+            if trade.current_price and trade.current_price > 0:
+                shares = abs(trade.amount) / trade.current_price
+                content += f"Приблизна кількість акцій: {shares:,.0f}\n"
+            content += "\n"
+            
+            # Investment recommendation
+            content += "💡 ІНВЕСТИЦІЙНА РЕКОМЕНДАЦІЯ\n"
+            content += "-" * 35 + "\n"
+            content += self.get_investment_recommendation(trade)
+            content += "\n"
+            
+            # Disclaimer
+            content += "⚠️ ЗАСТЕРЕЖЕННЯ\n"
+            content += "-" * 15 + "\n"
+            content += "Цей аналіз призначений виключно для інформаційних цілей.\n"
+            content += "Не є фінансовою порадою. Завжди проводьте власне дослідження\n"
+            content += "та консультуйтеся з фінансовими консультантами перед інвестуванням.\n"
+            content += "Інвестиції завжди пов'язані з ризиком втрати капіталу.\n"
             
             self.text_widget.insert('end', content)
             
         except Exception as e:
             logger.error(f"Failed to populate details dialog: {e}")
             self.text_widget.insert('end', f"Помилка завантаження даних: {str(e)}")
+    
+    def calculate_risk_score(self, trade) -> int:
+        """Calculate risk score from 1-10"""
+        risk_score = 5  # Base risk
+        
+        # Adjust based on various factors
+        if trade.score >= 8:
+            risk_score -= 2
+        elif trade.score >= 4:
+            risk_score -= 1
+        elif trade.score <= -4:
+            risk_score += 2
+        
+        # Sector risk
+        high_risk_sectors = ['Technology', 'Biotechnology', 'Energy']
+        if trade.sector in high_risk_sectors:
+            risk_score += 1
+        
+        # Trade type
+        if trade.trade_type.value == 'purchase':
+            risk_score -= 1
+        else:
+            risk_score += 1
+        
+        return max(1, min(10, risk_score))
+    
+    def get_risk_explanation(self, risk_score: int) -> str:
+        """Get risk explanation based on score"""
+        if risk_score <= 3:
+            return "Низький ризик - консервативна інвестиція з хорошими фундаментальними показниками.\n"
+        elif risk_score <= 6:
+            return "Помірний ризик - збалансована інвестиція з середніми перспективами.\n"
+        else:
+            return "Високий ризик - спекулятивна інвестиція, потребує обережності.\n"
+    
+    def get_investment_recommendation(self, trade) -> str:
+        """Get detailed investment recommendation"""
+        if not trade.recommendation:
+            return "Рекомендація недоступна через недостатність даних.\n"
+        
+        rec = trade.recommendation.value
+        
+        recommendations = {
+            "Strong Buy": "🚀 СИЛЬНА ПОКУПКА\nКомпанія демонструє відмінні фінансові показники та технічні сигнали.\nРекомендується для агресивних інвесторів з високою толерантністю до ризику.\n",
+            "Buy": "📈 ПОКУПКА\nПозитивні фундаментальні та технічні показники.\nПідходить для помірно агресивних інвесторів.\n",
+            "Hold": "⏸️ УТРИМАННЯ\nЗбалансовані показники без чітких сигналів.\nРекомендується утримувати існуючі позиції.\n",
+            "Sell": "📉 ПРОДАЖ\nНегативні тенденції у фінансових показниках.\nРозгляньте можливість продажу позицій.\n",
+            "Strong Sell": "🔻 СИЛЬНИЙ ПРОДАЖ\nСерйозні проблеми у фінансових показниках.\nНегайно розгляньте продаж позицій.\n"
+        }
+        
+        return recommendations.get(rec, "Невідома рекомендація.\n")
     
     def copy_to_clipboard(self):
         """Copy content to clipboard"""
@@ -116,6 +245,30 @@ class DetailsDialog:
             messagebox.showinfo("Успіх", "Дані скопійовано в буфер обміну")
         except Exception as e:
             messagebox.showerror("Помилка", f"Не вдалося скопіювати: {str(e)}")
+    
+    def export_to_file(self):
+        """Export content to file"""
+        try:
+            from tkinter import filedialog
+            
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[
+                    ("Text files", "*.txt"),
+                    ("All files", "*.*")
+                ],
+                initialname=f"{self.ticker}_analysis.txt"
+            )
+            
+            if filename:
+                content = self.text_widget.get('1.0', 'end-1c')
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                messagebox.showinfo("Успіх", f"Аналіз збережено: {filename}")
+                
+        except Exception as e:
+            logger.error(f"Failed to export analysis: {e}")
+            messagebox.showerror("Помилка", f"Не вдалося зберегти аналіз: {str(e)}")
 
 class ChartDialog:
     """Dialog for showing stock charts"""
@@ -321,6 +474,12 @@ class SettingsDialog:
         av_entry = ttk.Entry(parent, textvariable=self.settings_vars['alpha_vantage_key'], width=50, show='*')
         av_entry.pack(fill='x', pady=5)
         
+        # Polygon API Key
+        ttk.Label(parent, text="Polygon API Key:").pack(anchor='w', pady=5)
+        self.settings_vars['polygon_key'] = tk.StringVar()
+        polygon_entry = ttk.Entry(parent, textvariable=self.settings_vars['polygon_key'], width=50, show='*')
+        polygon_entry.pack(fill='x', pady=5)
+        
         # Rate limiting
         ttk.Label(parent, text="Запитів на хвилину:").pack(anchor='w', pady=5)
         self.settings_vars['requests_per_minute'] = tk.StringVar()
@@ -368,11 +527,10 @@ class SettingsDialog:
     
     def load_current_settings(self):
         """Load current settings into widgets"""
-        from config.settings import settings
-        
         # Load from environment or settings
         self.settings_vars['finnhub_key'].set(settings.FINNHUB_API_KEY)
         self.settings_vars['alpha_vantage_key'].set(settings.ALPHA_VANTAGE_API_KEY)
+        self.settings_vars['polygon_key'].set(settings.POLYGON_API_KEY)
         self.settings_vars['requests_per_minute'].set(str(settings.REQUESTS_PER_MINUTE))
         self.settings_vars['cache_duration'].set(str(settings.CACHE_DURATION_HOURS))
         self.settings_vars['finnhub_cache_ttl'].set(str(settings.FINNHUB_CACHE_TTL))
@@ -398,6 +556,7 @@ class SettingsDialog:
             env_content.update({
                 'FINNHUB_API_KEY': self.settings_vars['finnhub_key'].get(),
                 'ALPHA_VANTAGE_API_KEY': self.settings_vars['alpha_vantage_key'].get(),
+                'POLYGON_API_KEY': self.settings_vars['polygon_key'].get(),
                 'REQUESTS_PER_MINUTE': self.settings_vars['requests_per_minute'].get(),
                 'CACHE_DURATION_HOURS': self.settings_vars['cache_duration'].get(),
                 'FINNHUB_CACHE_TTL': self.settings_vars['finnhub_cache_ttl'].get(),
@@ -423,6 +582,7 @@ class SettingsDialog:
         defaults = {
             'finnhub_key': '',
             'alpha_vantage_key': '',
+            'polygon_key': '',
             'requests_per_minute': '60',
             'cache_duration': '1',
             'finnhub_cache_ttl': '86400',
@@ -433,3 +593,102 @@ class SettingsDialog:
         
         for key, value in defaults.items():
             self.settings_vars[key].set(value)
+
+class SupportDialog:
+    """Financial support dialog"""
+    
+    def __init__(self, parent):
+        self.parent = parent
+        self.dialog = None
+    
+    def show(self):
+        """Show support dialog"""
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title("Підтримка проекту")
+        self.dialog.geometry("500x600")
+        self.dialog.transient(self.parent)
+        self.dialog.grab_set()
+        
+        self.create_widgets()
+    
+    def create_widgets(self):
+        """Create support widgets"""
+        # Title
+        title_label = ttk.Label(
+            self.dialog, 
+            text="💰 Підтримка проекту", 
+            font=('Arial', 16, 'bold')
+        )
+        title_label.pack(pady=20)
+        
+        # Description
+        desc_text = """Якщо цей додаток допоміг вам у торгівлі та аналізі,
+ви можете підтримати розробку проекту."""
+        
+        desc_label = ttk.Label(self.dialog, text=desc_text, justify='center')
+        desc_label.pack(pady=10)
+        
+        # Payment methods
+        methods = [
+            ("🏦 Monobank", "https://send.monobank.ua/jar/8HL6KzZqVE"),
+            ("💳 Картка", "5375411208279047"),
+            ("₿ Bitcoin", "bc1q4fr0efqjuwv273lcncqgvw5lqayt5rnrz6j2s6"),
+            ("Ξ Ethereum", "0xa4E8ECf18A7704d1a276FCdC448515Ec82e48E2c"),
+            ("💰 Bitcoin Cash", "qr47gm66wcnr9xyfu70utyrdlqsshdt67g636rt9c5")
+        ]
+        
+        for method, value in methods:
+            frame = ttk.Frame(self.dialog)
+            frame.pack(fill='x', padx=20, pady=10)
+            
+            # Method label
+            method_label = ttk.Label(frame, text=method, font=('Arial', 12, 'bold'))
+            method_label.pack(anchor='w')
+            
+            # Value frame with copy button
+            value_frame = ttk.Frame(frame)
+            value_frame.pack(fill='x', pady=5)
+            
+            # Value entry (readonly)
+            value_var = tk.StringVar(value=value)
+            value_entry = ttk.Entry(value_frame, textvariable=value_var, state='readonly', width=50)
+            value_entry.pack(side='left', fill='x', expand=True)
+            
+            # Copy button
+            copy_button = ttk.Button(
+                value_frame, 
+                text="📋", 
+                width=3,
+                command=lambda v=value: self.copy_to_clipboard(v)
+            )
+            copy_button.pack(side='right', padx=(5, 0))
+        
+        # Thank you message
+        thanks_label = ttk.Label(
+            self.dialog, 
+            text="Дякуємо за підтримку! 🙏", 
+            font=('Arial', 12, 'italic'),
+            foreground='green'
+        )
+        thanks_label.pack(pady=20)
+        
+        # Close button
+        close_button = ttk.Button(self.dialog, text="Закрити", command=self.dialog.destroy)
+        close_button.pack(pady=10)
+    
+    def copy_to_clipboard(self, value: str):
+        """Copy value to clipboard"""
+        try:
+            self.dialog.clipboard_clear()
+            self.dialog.clipboard_append(value)
+            
+            # Show temporary success message
+            success_label = ttk.Label(self.dialog, text="✅ Скопійовано!", foreground='green')
+            success_label.pack()
+            
+            # Remove success message after 2 seconds
+            self.dialog.after(2000, success_label.destroy)
+            
+        except Exception as e:
+            logger.error(f"Failed to copy to clipboard: {e}")
+            messagebox.showerror("Помилка", "Не вдалося скопіювати")

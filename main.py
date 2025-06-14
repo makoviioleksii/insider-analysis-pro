@@ -5,6 +5,7 @@ Enhanced version with modular architecture, async operations, and improved analy
 """
 
 import sys
+import subprocess
 import asyncio
 from pathlib import Path
 
@@ -12,35 +13,70 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from gui.main_window import MainWindow
-from utils.logging_config import logger
-from config.settings import settings
+def install_package(package):
+    """Install a package using pip"""
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 def check_requirements():
     """Check if all required packages are installed"""
-    required_packages = [
-        'requests', 'cloudscraper', 'beautifulsoup4', 'yfinance',
-        'finnhub-python', 'pandas', 'numpy', 'matplotlib', 'ta',
-        'python-dotenv', 'pydantic', 'aiohttp'
-    ]
-    
+    required_packages = {
+        'requests': 'requests',
+        'cloudscraper': 'cloudscraper',
+        'beautifulsoup4': 'bs4',
+        'yfinance': 'yfinance',
+        'finnhub-python': 'finnhub',
+        'pandas': 'pandas',
+        'numpy': 'numpy',
+        'matplotlib': 'matplotlib',
+        'ta': 'ta',
+        'python-dotenv': 'dotenv',
+        'pydantic': 'pydantic',
+        'aiohttp': 'aiohttp',
+        'asyncio-throttle': 'asyncio_throttle'
+    }
+
     missing_packages = []
-    
-    for package in required_packages:
+
+    for pip_name, import_name in required_packages.items():
         try:
-            __import__(package.replace('-', '_'))
+            __import__(import_name)
         except ImportError:
-            missing_packages.append(package)
-    
+            missing_packages.append(pip_name)
+
     if missing_packages:
-        logger.error(f"Missing required packages: {', '.join(missing_packages)}")
-        print(f"Please install missing packages: pip install {' '.join(missing_packages)}")
-        return False
-    
+        print(f"Missing required packages: {', '.join(missing_packages)}")
+        
+        # Try to auto-install missing packages
+        auto_install = input("Do you want to auto-install missing packages? (y/n): ").lower().strip()
+        if auto_install == 'y':
+            print("Installing missing packages...")
+            failed_packages = []
+            for package in missing_packages:
+                print(f"Installing {package}...")
+                if not install_package(package):
+                    failed_packages.append(package)
+            
+            if failed_packages:
+                print(f"Failed to install: {', '.join(failed_packages)}")
+                print(f"Please install manually: pip install {' '.join(failed_packages)}")
+                return False
+            else:
+                print("All packages installed successfully!")
+                return True
+        else:
+            print(f"Please install missing packages: pip install {' '.join(missing_packages)}")
+            return False
+
     return True
 
 def setup_environment():
     """Setup application environment"""
+    from config.settings import settings
+    from utils.logging_config import logger
     
     # Create necessary directories
     for directory in [settings.CACHE_DIR, settings.LOGS_DIR, settings.DATA_DIR]:
@@ -63,11 +99,17 @@ def main():
     """Main application entry point"""
     
     try:
-        logger.info("Starting Insider Trading Monitor Pro v2.0")
+        print("Starting Insider Trading Monitor Pro v2.0")
         
         # Check requirements
         if not check_requirements():
             sys.exit(1)
+        
+        # Import after requirements check
+        from gui.main_window import MainWindow
+        from utils.logging_config import logger
+        
+        logger.info("Starting Insider Trading Monitor Pro v2.0")
         
         # Setup environment
         setup_environment()
@@ -77,13 +119,21 @@ def main():
         app.run()
         
     except KeyboardInterrupt:
-        logger.info("Application interrupted by user")
+        print("Application interrupted by user")
     except Exception as e:
-        logger.error(f"Application failed to start: {e}", exc_info=True)
         print(f"Error: {e}")
+        try:
+            from utils.logging_config import logger
+            logger.error(f"Application failed to start: {e}", exc_info=True)
+        except:
+            pass
         sys.exit(1)
     finally:
-        logger.info("Application shutdown")
+        try:
+            from utils.logging_config import logger
+            logger.info("Application shutdown")
+        except:
+            pass
 
 if __name__ == "__main__":
     main()

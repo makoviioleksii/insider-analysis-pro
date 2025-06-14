@@ -69,10 +69,13 @@ class CacheManager:
             except (json.JSONDecodeError, FileNotFoundError):
                 logger.warning(f"Could not load existing cache {cache_type}, creating new")
         
+        # Convert data to JSON serializable format
+        serializable_data = self._make_serializable(data)
+        
         # Add new entry
         now = datetime.now()
         cache[ticker] = {
-            'data': data,
+            'data': serializable_data,
             'timestamp': time.time(),
             'timestamp_iso': now.isoformat(),
             'cache_type': cache_type
@@ -85,6 +88,23 @@ class CacheManager:
             logger.debug(f"Cached data for {ticker} in {cache_type}")
         except Exception as e:
             logger.error(f"Failed to save cache for {ticker} in {cache_type}: {e}")
+    
+    def _make_serializable(self, obj):
+        """Convert object to JSON serializable format"""
+        if hasattr(obj, 'to_dict'):
+            return obj.to_dict()
+        elif isinstance(obj, dict):
+            return {str(k): self._make_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._make_serializable(item) for item in obj]
+        elif hasattr(obj, '__dict__'):
+            return self._make_serializable(obj.__dict__)
+        else:
+            try:
+                json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                return str(obj)
     
     def clear_cache(self, cache_type: str = None):
         """Clear cache files"""

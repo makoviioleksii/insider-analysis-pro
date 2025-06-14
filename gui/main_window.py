@@ -4,24 +4,44 @@ import threading
 import webbrowser
 from datetime import datetime
 from typing import List, Dict, Any
-from gui.components import TradingTreeView, FilterFrame, StatusBar, AnalysisFrame
-from gui.dialogs import DetailsDialog, ChartDialog, SettingsDialog
+from gui.components import TradingTreeView, FilterFrame, StatusBar, WatchlistFrame, AdvancedAnalysisFrame
+from gui.dialogs import DetailsDialog, ChartDialog, SettingsDialog, SupportDialog
 from services.trading_service import TradingService
 from utils.logging_config import logger
 from config.settings import settings
 
+class LogHandler:
+    """Custom log handler for GUI"""
+    
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
+    
+    def write(self, message):
+        """Write message to text widget"""
+        if self.text_widget and message.strip():
+            self.text_widget.config(state='normal')
+            self.text_widget.insert(tk.END, message)
+            self.text_widget.see(tk.END)
+            self.text_widget.config(state='disabled')
+    
+    def flush(self):
+        """Flush method for compatibility"""
+        pass
+
 class MainWindow:
-    """Main application window"""
+    """Main application window with enhanced features"""
     
     def __init__(self):
         self.root = tk.Tk()
         self.trading_service = TradingService()
         self.last_trades = []
         self.auto_update_enabled = tk.BooleanVar(value=True)
+        self.current_lang = 'ua'
         
         self.setup_window()
         self.create_widgets()
         self.setup_bindings()
+        self.setup_log_handler()
         
         # Start initial update
         self.start_update_thread()
@@ -31,12 +51,35 @@ class MainWindow:
         self.root.title("Монітор Інсайдерських Торгів Pro v2.0")
         self.root.state('zoomed')
         
-        # Configure style
+        # Configure modern style
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("Treeview", rowheight=25, font=('Arial', 10))
-        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'))
-        style.configure("TNotebook.Tab", font=('Arial', 10, 'bold'), padding=[10, 5])
+        
+        # Modern color scheme
+        style.configure("Treeview", 
+                       rowheight=28, 
+                       font=('Segoe UI', 10),
+                       background='#ffffff',
+                       foreground='#333333',
+                       fieldbackground='#ffffff')
+        
+        style.configure("Treeview.Heading", 
+                       font=('Segoe UI', 10, 'bold'),
+                       background='#f0f0f0',
+                       foreground='#333333')
+        
+        style.configure("TNotebook.Tab", 
+                       font=('Segoe UI', 10, 'bold'), 
+                       padding=[15, 8])
+        
+        style.configure("TButton",
+                       font=('Segoe UI', 9),
+                       padding=[10, 5])
+        
+        # Configure colors for different states
+        style.map("Treeview",
+                 background=[('selected', '#0078d4')],
+                 foreground=[('selected', 'white')])
     
     def create_widgets(self):
         """Create all GUI widgets"""
@@ -53,6 +96,7 @@ class MainWindow:
         self.create_trading_tabs()
         self.create_analysis_tab()
         self.create_settings_tab()
+        self.create_support_tab()
         self.create_logs_tab()
         
         # Status bar
@@ -70,74 +114,128 @@ class MainWindow:
         self.notebook.add(purchases_frame, text="Покупки")
         self.purchases_tree = TradingTreeView(purchases_frame, "purchases")
         
-        # Sales tab - with placeholder when disabled
+        # Sales tab with improved placeholder
         sales_frame = ttk.Frame(self.notebook)
         self.notebook.add(sales_frame, text="Продажі")
-        self.sales_tree = TradingTreeView(sales_frame, "sales")
         
-        # Sales placeholder
+        # Create container for sales content
+        sales_container = ttk.Frame(sales_frame)
+        sales_container.pack(fill='both', expand=True)
+        
+        # Sales tree (initially hidden)
+        self.sales_tree = TradingTreeView(sales_container, "sales")
+        
+        # Compact sales placeholder
         self.sales_placeholder = ttk.Label(
-            sales_frame, 
+            sales_container, 
             text="Продажі вимкнені. Увімкніть чекбокс 'Включити продажі' для завантаження.",
-            font=('Arial', 12),
-            foreground='gray'
+            font=('Segoe UI', 11),
+            foreground='#666666',
+            background='#f8f9fa',
+            relief='solid',
+            borderwidth=1,
+            padding=10
         )
-        self.sales_placeholder.pack(pady=50)
+        self.sales_placeholder.pack(pady=20, padx=20, fill='x')
         
-        # Watchlist tab
+        # Watchlist tab with enhanced functionality
         watchlist_frame = ttk.Frame(self.notebook)
         self.notebook.add(watchlist_frame, text="Watchlist")
-        self.watchlist_tree = TradingTreeView(watchlist_frame, "watchlist")
+        self.watchlist_frame = WatchlistFrame(watchlist_frame, self.trading_service)
         
-        self.all_trees = [self.purchases_tree, self.sales_tree, self.watchlist_tree]
+        self.all_trees = [self.purchases_tree, self.sales_tree, self.watchlist_frame.watchlist_tree]
     
     def create_analysis_tab(self):
-        """Create analysis tab"""
+        """Create advanced analysis tab"""
         analysis_frame = ttk.Frame(self.notebook)
-        self.notebook.add(analysis_frame, text="Технічний Аналіз")
-        self.analysis_frame = AnalysisFrame(analysis_frame, self.trading_service)
+        self.notebook.add(analysis_frame, text="Розширений Аналіз")
+        self.analysis_frame = AdvancedAnalysisFrame(analysis_frame, self.trading_service)
     
     def create_settings_tab(self):
         """Create settings tab"""
         settings_frame = ttk.Frame(self.notebook)
         self.notebook.add(settings_frame, text="Налаштування")
         
-        # Settings content
-        ttk.Label(settings_frame, text="Налаштування додатку", font=('Arial', 14, 'bold')).pack(pady=10)
+        # Settings content with modern design
+        title_frame = ttk.Frame(settings_frame)
+        title_frame.pack(fill='x', padx=20, pady=20)
         
-        settings_button = ttk.Button(
-            settings_frame, 
-            text="Відкрити налаштування", 
-            command=self.open_settings_dialog
+        ttk.Label(title_frame, text="⚙️ Налаштування додатку", 
+                 font=('Segoe UI', 16, 'bold')).pack()
+        
+        # Settings sections
+        sections = [
+            ("🔑 API Ключі", "Налаштування ключів для зовнішніх сервісів", self.open_settings_dialog),
+            ("🗂️ Управління кешем", "Очищення та статистика кешу", None),
+            ("📊 Finnhub API", "Інформація про використання Finnhub", None)
+        ]
+        
+        for title, desc, command in sections:
+            section_frame = ttk.LabelFrame(settings_frame, text=title, padding=15)
+            section_frame.pack(fill='x', padx=20, pady=10)
+            
+            ttk.Label(section_frame, text=desc, font=('Segoe UI', 10)).pack(anchor='w')
+            
+            if command:
+                ttk.Button(section_frame, text="Відкрити", command=command).pack(anchor='w', pady=(10, 0))
+            elif "кешем" in title:
+                cache_buttons = ttk.Frame(section_frame)
+                cache_buttons.pack(anchor='w', pady=(10, 0))
+                ttk.Button(cache_buttons, text="Очистити кеш", command=self.clear_cache).pack(side='left', padx=(0, 10))
+                ttk.Button(cache_buttons, text="Статистика", command=self.show_cache_stats).pack(side='left')
+            elif "Finnhub" in title:
+                info_text = ("Finnhub API використовується тільки вручну через обмеження.\n"
+                           "Використовуйте кнопку 'Finnhub Аналіз (Ручний)' в розділі Розширений Аналіз.")
+                ttk.Label(section_frame, text=info_text, foreground='#0066cc', 
+                         font=('Segoe UI', 9)).pack(anchor='w', pady=(10, 0))
+    
+    def create_support_tab(self):
+        """Create financial support tab"""
+        support_frame = ttk.Frame(self.notebook)
+        self.notebook.add(support_frame, text="💰 Підтримка")
+        
+        # Support content
+        title_frame = ttk.Frame(support_frame)
+        title_frame.pack(fill='x', padx=20, pady=20)
+        
+        ttk.Label(title_frame, text="💰 Фінансова підтримка проекту", 
+                 font=('Segoe UI', 16, 'bold')).pack()
+        
+        desc_text = ("Якщо цей додаток допоміг вам у торгівлі та аналізі,\n"
+                    "ви можете підтримати розробку проекту.")
+        ttk.Label(title_frame, text=desc_text, font=('Segoe UI', 11), 
+                 justify='center').pack(pady=10)
+        
+        # Support button
+        support_button = ttk.Button(
+            title_frame, 
+            text="🎁 Показати реквізити", 
+            command=self.show_support_dialog,
+            style="Accent.TButton"
         )
-        settings_button.pack(pady=10)
+        support_button.pack(pady=20)
         
-        # Cache management
-        cache_frame = ttk.LabelFrame(settings_frame, text="Управління кешем", padding=10)
-        cache_frame.pack(fill='x', padx=10, pady=10)
+        # Thank you message
+        thanks_frame = ttk.Frame(support_frame)
+        thanks_frame.pack(fill='x', padx=20, pady=20)
         
-        ttk.Button(cache_frame, text="Очистити кеш", command=self.clear_cache).pack(side='left', padx=5)
-        ttk.Button(cache_frame, text="Статистика кешу", command=self.show_cache_stats).pack(side='left', padx=5)
-        
-        # Finnhub info
-        finnhub_frame = ttk.LabelFrame(settings_frame, text="Finnhub API", padding=10)
-        finnhub_frame.pack(fill='x', padx=10, pady=10)
-        
-        info_text = "Finnhub API використовується тільки вручну через обмеження.\n"
-        info_text += "Використовуйте кнопку 'Finnhub Аналіз (Ручний)' в розділі Технічний Аналіз."
-        
-        ttk.Label(finnhub_frame, text=info_text, foreground='blue').pack()
+        ttk.Label(thanks_frame, text="Дякуємо за використання нашого додатку! 🙏", 
+                 font=('Segoe UI', 12, 'italic'), foreground='#28a745').pack()
     
     def create_logs_tab(self):
         """Create logs tab"""
         log_frame = ttk.Frame(self.notebook)
         self.notebook.add(log_frame, text="Логи")
         
+        # Log display
         self.log_text = scrolledtext.ScrolledText(
             log_frame, 
             wrap='word', 
-            font=('Consolas', 10),
-            state='disabled'
+            font=('Consolas', 9),
+            state='disabled',
+            background='#1e1e1e',
+            foreground='#ffffff',
+            insertbackground='#ffffff'
         )
         self.log_text.pack(fill='both', expand=True, padx=10, pady=10)
         
@@ -145,23 +243,36 @@ class MainWindow:
         log_controls = ttk.Frame(log_frame)
         log_controls.pack(fill='x', padx=10, pady=5)
         
-        ttk.Button(log_controls, text="Оновити логи", command=self.update_log_display).pack(side='left', padx=5)
-        ttk.Button(log_controls, text="Очистити логи", command=self.clear_logs).pack(side='left', padx=5)
-        ttk.Button(log_controls, text="Експорт логів", command=self.export_logs).pack(side='left', padx=5)
+        ttk.Button(log_controls, text="🔄 Оновити логи", command=self.update_log_display).pack(side='left', padx=5)
+        ttk.Button(log_controls, text="🗑️ Очистити логи", command=self.clear_logs).pack(side='left', padx=5)
+        ttk.Button(log_controls, text="💾 Експорт логів", command=self.export_logs).pack(side='left', padx=5)
+        
+        # Auto-refresh checkbox
+        self.auto_refresh_logs = tk.BooleanVar(value=True)
+        ttk.Checkbutton(log_controls, text="Автооновлення", 
+                       variable=self.auto_refresh_logs).pack(side='right', padx=5)
     
     def create_action_buttons(self):
         """Create action buttons frame"""
         action_frame = ttk.Frame(self.root)
         action_frame.pack(fill='x', padx=10, pady=5)
         
-        ttk.Button(action_frame, text="Деталі", command=self.show_details).pack(side='left', padx=5)
-        ttk.Button(action_frame, text="Графік", command=self.show_chart).pack(side='left', padx=5)
-        ttk.Button(action_frame, text="Експорт", command=self.export_data).pack(side='left', padx=5)
+        # Left side buttons
+        left_buttons = ttk.Frame(action_frame)
+        left_buttons.pack(side='left')
+        
+        ttk.Button(left_buttons, text="📋 Деталі", command=self.show_details).pack(side='left', padx=5)
+        ttk.Button(left_buttons, text="📈 Графік", command=self.show_chart).pack(side='left', padx=5)
+        ttk.Button(left_buttons, text="💾 Експорт", command=self.export_data).pack(side='left', padx=5)
+        
+        # Right side controls
+        right_controls = ttk.Frame(action_frame)
+        right_controls.pack(side='right')
         
         # Auto-update checkbox
         auto_update_check = ttk.Checkbutton(
-            action_frame, 
-            text="Автооновлення", 
+            right_controls, 
+            text="🔄 Автооновлення", 
             variable=self.auto_update_enabled
         )
         auto_update_check.pack(side='right', padx=5)
@@ -170,12 +281,41 @@ class MainWindow:
         """Setup event bindings"""
         for tree in self.all_trees:
             tree.bind('<Double-1>', self.on_tree_double_click)
-            tree.bind('<Button-3>', self.on_tree_right_click)  # Right click context menu
+            tree.bind('<Button-3>', self.on_tree_right_click)
         
         # Keyboard shortcuts
         self.root.bind('<F5>', lambda e: self.start_update_thread())
         self.root.bind('<Control-s>', lambda e: self.open_settings_dialog())
         self.root.bind('<Control-e>', lambda e: self.export_data())
+        self.root.bind('<Control-d>', lambda e: self.show_details())
+        self.root.bind('<Control-g>', lambda e: self.show_chart())
+    
+    def setup_log_handler(self):
+        """Setup log handler for real-time log display"""
+        # Start log monitoring thread
+        self.start_log_monitoring()
+    
+    def start_log_monitoring(self):
+        """Start monitoring log file for changes"""
+        def monitor_logs():
+            import time
+            last_size = 0
+            
+            while True:
+                try:
+                    if self.auto_refresh_logs.get() and settings.LOG_FILE.exists():
+                        current_size = settings.LOG_FILE.stat().st_size
+                        if current_size != last_size:
+                            self.root.after(0, self.update_log_display)
+                            last_size = current_size
+                    
+                    time.sleep(2)  # Check every 2 seconds
+                    
+                except Exception as e:
+                    logger.error(f"Log monitoring error: {e}")
+                    time.sleep(5)
+        
+        threading.Thread(target=monitor_logs, daemon=True).start()
     
     def on_update_clicked(self):
         """Handle update button click"""
@@ -216,7 +356,7 @@ class MainWindow:
                     import winsound
                     winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
                 except ImportError:
-                    pass  # winsound not available on non-Windows
+                    pass
             
             # Filter trades by type and time
             from datetime import datetime, timedelta
@@ -229,7 +369,7 @@ class MainWindow:
             purchase_trades = [t for t in trades if t.trade_type.value == 'purchase' and t.date >= main_threshold]
             sale_trades = [t for t in trades if t.trade_type.value == 'sale' and t.date >= main_threshold]
             
-            # Watchlist trades (enhanced processing)
+            # Watchlist trades
             watchlist_tickers = self.trading_service.load_watchlist()
             watchlist_trades = [t for t in trades if t.ticker in watchlist_tickers and t.date >= watchlist_threshold]
             
@@ -239,12 +379,14 @@ class MainWindow:
             # Handle sales tree based on checkbox
             if params['include_sales']:
                 self.sales_placeholder.pack_forget()
+                self.sales_tree.pack(fill='both', expand=True)
                 self.sales_tree.update_trades(sale_trades)
             else:
-                self.sales_tree.update_trades([])  # Clear sales
-                self.sales_placeholder.pack(pady=50)
+                self.sales_tree.pack_forget()
+                self.sales_tree.update_trades([])
+                self.sales_placeholder.pack(pady=20, padx=20, fill='x')
             
-            self.watchlist_tree.update_trades(watchlist_trades)
+            self.watchlist_frame.watchlist_tree.update_trades(watchlist_trades)
             
             # Update status
             status_msg = f"Оновлено: {len(purchase_trades)} покупок"
@@ -280,11 +422,11 @@ class MainWindow:
             
             # Create context menu
             context_menu = tk.Menu(self.root, tearoff=0)
-            context_menu.add_command(label="Показати деталі", command=self.show_details)
-            context_menu.add_command(label="Відкрити графік", command=self.show_chart)
-            context_menu.add_command(label="Відкрити Finviz", command=lambda: self.open_finviz(tree, item))
+            context_menu.add_command(label="📋 Показати деталі", command=self.show_details)
+            context_menu.add_command(label="📈 Відкрити графік", command=self.show_chart)
+            context_menu.add_command(label="🌐 Відкрити Finviz", command=lambda: self.open_finviz(tree, item))
             context_menu.add_separator()
-            context_menu.add_command(label="Додати до Watchlist", command=lambda: self.add_to_watchlist(tree, item))
+            context_menu.add_command(label="⭐ Додати до Watchlist", command=lambda: self.add_to_watchlist(tree, item))
             
             try:
                 context_menu.tk_popup(event.x_root, event.y_root)
@@ -306,6 +448,8 @@ class MainWindow:
             try:
                 self.trading_service.add_to_watchlist(ticker)
                 messagebox.showinfo("Успіх", f"{ticker} додано до watchlist")
+                # Refresh watchlist display
+                self.watchlist_frame.refresh_watchlist()
             except Exception as e:
                 messagebox.showerror("Помилка", f"Не вдалося додати {ticker} до watchlist: {str(e)}")
     
@@ -343,7 +487,7 @@ class MainWindow:
         elif tab_text == "Продажі":
             return self.sales_tree
         elif tab_text == "Watchlist":
-            return self.watchlist_tree
+            return self.watchlist_frame.watchlist_tree
         return None
     
     def export_data(self):
@@ -359,6 +503,11 @@ class MainWindow:
     def open_settings_dialog(self):
         """Open settings dialog"""
         dialog = SettingsDialog(self.root)
+        dialog.show()
+    
+    def show_support_dialog(self):
+        """Show support dialog"""
+        dialog = SupportDialog(self.root)
         dialog.show()
     
     def clear_cache(self):
@@ -378,17 +527,17 @@ class MainWindow:
             
             dialog = tk.Toplevel(self.root)
             dialog.title("Статистика кешу")
-            dialog.geometry("400x300")
+            dialog.geometry("500x400")
             
-            text_widget = scrolledtext.ScrolledText(dialog, wrap='word')
+            text_widget = scrolledtext.ScrolledText(dialog, wrap='word', font=('Consolas', 10))
             text_widget.pack(fill='both', expand=True, padx=10, pady=10)
             
-            content = "Статистика кешу\n" + "=" * 20 + "\n\n"
+            content = "📊 Статистика кешу\n" + "=" * 30 + "\n\n"
             for cache_type, info in stats.items():
-                content += f"{cache_type}:\n"
-                content += f"  Записів: {info['entries']}\n"
-                content += f"  Розмір: {info['size_mb']:.2f} MB\n"
-                content += f"  Оновлено: {info['last_modified']}\n\n"
+                content += f"📁 {cache_type}:\n"
+                content += f"   Записів: {info['entries']}\n"
+                content += f"   Розмір: {info['size_mb']:.2f} MB\n"
+                content += f"   Оновлено: {info['last_modified']}\n\n"
             
             text_widget.insert('1.0', content)
             text_widget.config(state='disabled')
@@ -399,6 +548,9 @@ class MainWindow:
     def update_log_display(self):
         """Update log display"""
         try:
+            if not settings.LOG_FILE.exists():
+                return
+                
             with open(settings.LOG_FILE, 'r', encoding='utf-8') as f:
                 content = f.read()
             
